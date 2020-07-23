@@ -1,6 +1,6 @@
-﻿#CJKEnhancedUI.py
-#Version 1.2
-#Customizations and enhancements by Michael M Chen <nvda.conceptsphere@gmail.com>
+﻿#CJK_QuickReview.py
+#Version 1.4
+#Customizations and enhancements by Michael M Chen <m11chen.nvda@gmail.com>
 #Tested by 蔡宗豪 Victor Cai <surfer0627@gmail.com>
 #A global plug-in intended for the CJK locales
 #Utilizing the character processing framework, several enhancements are implemented for a more user friendly experience.
@@ -16,6 +16,12 @@
 #Braille review mode on: pressing numpad2 [or nvda+.(dot)] displays the character descriptions.
 #Braille review mode auto: moving the system or review cursor within a region  of text automatically displays the character descriptions.
 #For "On" and "Auto" mode, typing into the input composition window automatically displays character descriptions for single characters.
+#####
+# version 1.4
+# Upgrading to compatible with NVDA 2019.3 and Python 3 by Tseng Woody <tsengwoody.tw@gmail.com>
+#####
+# version 1.4
+# Upgrading to compatible with NVDA 2020.1 ('getSpeechForSpelling' rename to 'getSpellingSpeech') by Tseng Woody <tsengwoody.tw@gmail.com>
 
 import braille
 from braille import BrailleHandler, handler
@@ -31,6 +37,8 @@ import scriptHandler
 import speech
 from speech import *
 import ui
+import queueHandler
+import controlTypes
 
 #Check the config file for existing version of the plug-in.
 try:
@@ -73,68 +81,85 @@ def isAlphanumeric(char):
 	else:
 		return False
 
-def custom_speakSpellingGen(text, locale, useCharacterDescriptions):
-	"""
-	This is derived from speech._speakSpellingGen to handle the speech review behavior.
-	@param text: the text to be spoken
-	@type text: string
-	@param locale: the locale (language[_COUNTRY]) for the character descriptions
-	@type locale: string
-	@param useCharacterDescriptions: whether character descriptions should be spoken
-	@type useCharacterDescriptions: boolean
-	"""
-	synth=getSynth()
+def custom_getSpellingSpeech(  # noqa: C901
+		text: str,
+		locale: Optional[str] = None,
+		useCharacterDescriptions: bool = False
+):
+	defaultLanguage=getCurrentLanguage()
+	if not locale or (not config.conf['speech']['autoDialectSwitching'] and locale.split('_')[0]==defaultLanguage.split('_')[0]):
+		locale=defaultLanguage
+
+	if not text:
+		# Translators: This is spoken when NVDA moves to an empty line.
+		yield _("blank")
+		return
+	if not text.isspace():
+		text=text.rstrip()
+
+	synth = getSynth()
 	synthConfig=config.conf["speech"][synth.name]
-	buf=[(text,locale,useCharacterDescriptions)]
-	for text,locale,useCharacterDescriptions in buf:
-		textLength=len(text)
-		for count,char in enumerate(text): 
-			uppercase=char.isupper()
-			charDesc=None
+	charMode = False
+	textLength=len(text)
+	count = 0
+	localeHasConjuncts = True if locale.split('_',1)[0] in LANGS_WITH_CONJUNCT_CHARS else False
+	charDescList = getCharDescListFromText(text,locale) if localeHasConjuncts else text
+	for item in charDescList:
+		if localeHasConjuncts:
+			# item is a tuple containing character and its description
+			speakCharAs = item[0]
+			charDesc = item[1]
+		else:
+			charDesc = None
+			# item is just a character.
+			speakCharAs = item
 			if CJK["speechReview"] == "Off" and useCharacterDescriptions:
-				charDesc = characterProcessing.getCharacterDescription(locale, char.lower())
+				charDesc=characterProcessing.getCharacterDescription(locale,speakCharAs.lower())
 			else:
 				#do not speak character descriptions for alphanumeric characters unless the function is called by the review_currentCharacter method.
 				#This is to prevent phonetic spelling of the alphabets when typing, and moving the caret and review cursor.
-				if isAlphanumeric(char) and not CJK["isReviewCharacter"]:
+				if isAlphanumeric(speakCharAs) and not CJK["isReviewCharacter"]:
 					#The cursor has moved, so reset the previously stored character.
 					#This allows  for a more consistent speech feedback by always speaking the phonetic spelling of alphanumeric characters first after the focus moves.
 					CJK["previousCharacter"] = ""
 				elif CJK["speechReview"] == "On":
 					#Retrieve the character description one at a time.
-					charDesc=speechReview_getCharacterDescription(locale,char.lower())
+					charDesc=speechReview_getCharacterDescription(locale, speakCharAs.lower())
 
 			if charDesc and CJK["speechReview"] == "On":
-				char = "".join(charDesc)
+				speakCharAs = "".join(charDesc)
 			elif charDesc:
-				char=charDesc[0] if textLength>1 else u"\u3001".join(charDesc)
+				IDEOGRAPHIC_COMMA = u"\u3001"
+				speakCharAs=charDesc[0] if textLength>1 else IDEOGRAPHIC_COMMA.join(charDesc)
 			else:
-				char=characterProcessing.processSpeechSymbol(locale,char)
+				speakCharAs = characterProcessing.processSpeechSymbol(locale, speakCharAs)
 
-			if uppercase and synthConfig["sayCapForCapitals"]:
-				char=_("cap %s")%char
-			if uppercase and synth.isSupported("pitch") and synthConfig["capPitchChange"]:
-				oldPitch=synthConfig["pitch"]
-				synth.pitch=max(0,min(oldPitch+synthConfig["capPitchChange"],100))
-			index=count+1
-			log.io("Speaking character %r"%char)
-			speechSequence=[LangChangeCommand(locale)] if config.conf['speech']['autoLanguageSwitching'] else []
-			if len(char) == 1 and synthConfig["useSpellingFunctionality"]:
-				speechSequence.append(CharacterModeCommand(True))
-			if index is not None:
-				speechSequence.append(IndexCommand(index))
-			speechSequence.append(char)
-			synth.speak(speechSequence)
-			if uppercase and synth.isSupported("pitch") and synthConfig["capPitchChange"]:
-				synth.pitch=oldPitch
-			while textLength>1 and (isPaused or getLastSpeechIndex()!=index):
-				for x in xrange(2):
-					args=yield
-					if args: buf.append(args)
-			if uppercase and  synthConfig["beepForCapitals"]:
-				tones.beep(2000,50)
-		args=yield
-		if args: buf.append(args)
+		uppercase=speakCharAs.isupper()
+		# if useCharacterDescriptions and charDesc:
+			# IDEOGRAPHIC_COMMA = u"\u3001"
+			# speakCharAs=charDesc[0] if textLength>1 else IDEOGRAPHIC_COMMA.join(charDesc)
+		# else:
+			# speakCharAs=characterProcessing.processSpeechSymbol(locale,speakCharAs)'''
+		if uppercase and synthConfig["sayCapForCapitals"]:
+			# Translators: cap will be spoken before the given letter when it is capitalized.
+			speakCharAs=_("cap %s")%speakCharAs
+		if uppercase and synth.isSupported("pitch") and synthConfig["capPitchChange"]:
+			yield PitchCommand(offset=synthConfig["capPitchChange"])
+		if config.conf['speech']['autoLanguageSwitching']:
+			yield LangChangeCommand(locale)
+		if len(speakCharAs) == 1 and synthConfig["useSpellingFunctionality"]:
+			if not charMode:
+				yield CharacterModeCommand(True)
+				charMode = True
+		elif charMode:
+			yield CharacterModeCommand(False)
+			charMode = False
+		if uppercase and  synthConfig["beepForCapitals"]:
+			yield BeepCommand(2000, 50)
+		yield speakCharAs
+		if uppercase and synth.isSupported("pitch") and synthConfig["capPitchChange"]:
+			yield PitchCommand()
+		yield EndUtteranceCommand()
 
 def custom_doCursorMove(self, region):
 	"""
@@ -250,7 +275,7 @@ def speechReview_getCharacterDescription(locale, character):
 	#Free the character descriptions from the decimal and hexadecimal representation at the end of the list.
 	#This restores default behavior of the characterProcessing.getCharacterDescription function.
 	desc.remove(s)
-	return currentDesc
+	return currentDesc.strip()
 
 class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 
@@ -264,11 +289,11 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 		CJK["previousRawText"] = None	#Stores the raw text of the Braille region before the last cursor move.
 		CJK["previousCursorPos"] = -1	#Stores the position of the cursor before the last cursor move.
 
-		self.default_speakSpellingGen = speech._speakSpellingGen
+		self.default_getSpeechForSpelling = speech.getSpeechForSpelling
 		self.default_doCursorMove = BrailleHandler._doCursorMove
 		self.default_reportNewText = InputComposition.reportNewText
 
-		speech._speakSpellingGen = custom_speakSpellingGen
+		speech.getSpellingSpeech = custom_getSpellingSpeech
 		BrailleHandler._doCursorMove = custom_doCursorMove
 		InputComposition.reportNewText = custom_reportNewText
 
@@ -277,7 +302,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 			CJK["speechReview"] = "On"
 		else:
 			CJK["speechReview"] = "Off"
-		ui.message(_("Speech review mode "+CJK["speechReview"]))
+		ui.message(_("Quick review mode "+CJK["speechReview"]))
 	script_ToggleSpeechReview.__doc__=_("Toggle on or off the CJK enhanced UI speech review mode.")
 
 	def script_ToggleBrailleReview(self,gesture):
@@ -390,17 +415,20 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 				except TypeError:
 					pass
 		elif count == 0:
-			speech.speakTextInfo(info,unit=textInfos.UNIT_CHARACTER,reason=speech.REASON_CARET)
+			speech.speakTextInfo(info,unit=textInfos.UNIT_CHARACTER,reason=controlTypes.REASON_CARET)
 		else:
 			try:
 				speech.speakMessage("%d," % c)
 				speech.speakSpelling(hex(c))
 			except:
-				speech.speakTextInfo(info,unit=textInfos.UNIT_CHARACTER,reason=speech.REASON_CARET)
+				speech.speakTextInfo(info,unit=textInfos.UNIT_CHARACTER,reason=controlTypes.REASON_CARET)
 		#Reset parameters to prepare for the next call.
 		CJK["direction"] = 0
 		CJK["isReviewCharacter"] = False
-	script_forward_review_currentCharacter.__doc__=_("Reports the character of the current navigator object where the review cursor is situated. If this key is pressed twice, character descriptions are spoken.  If pressed three times, ascii and hexadecimal representations for the character are spoken")
+	script_forward_review_currentCharacter.__doc__=_("Reports the character of the current navigator object where the review "
+"cursor is situated. Pressing twice reports a description or example of that "
+"character. Pressing three times reports the numeric value of the character "
+"in decimal and hexadecimal")
 	script_forward_review_currentCharacter.category=SCRCAT_TEXTREVIEW
 
 	def script_reverse_review_currentCharacter(self,gesture):
@@ -415,7 +443,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 	script_reverse_review_currentCharacter.category=SCRCAT_TEXTREVIEW
 
 	def terminate(self):
-		speech._speakSpellingGen = self.default_speakSpellingGen
+		speech.getSpeechForSpelling = self.default_getSpeechForSpelling
 		BrailleHandler._doCursorMove = self.default_doCursorMove
 		InputComposition.reportNewText = self.default_reportNewText
 		super(GlobalPlugin, self).terminate()
