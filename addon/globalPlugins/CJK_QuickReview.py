@@ -24,6 +24,8 @@
 # Upgrading to compatible with NVDA 2020.1 ('getSpeechForSpelling' rename to 'getSpellingSpeech') by Tseng Woody <tsengwoody.tw@gmail.com>
 # version 1.5
 # Upgrading to compatible with NVDA 2021.1 by Tseng Woody <tsengwoody.tw@gmail.com>
+# version 1.6
+# upgrade to be compatible with version 2022.4 by Michael Chen <m11chen.nvda@gmail.com>
 
 import addonHandler
 import api
@@ -55,27 +57,27 @@ ADDON_SUMMARY = addonHandler.getCodeAddon().manifest["summary"]
 
 #Check the config file for existing version of the plug-in.
 try:
-    if conf["CJKEnhancedUI"]["version"] == "1.2":
+    if conf["CJKQuickReview"]["version"] == "1.6":
         #The config section is up to date, so continue initializing the plug-in.
         pass
     else:
         #Maintain the config section from the previous version.
         #the CJK["isAlphanumeric"] variable is deprecated, so reset the config section to remove it.
-        speechReview = conf["CJKEnhancedUI"]["speechReview"]
-        brailleReview = conf["CJKEnhancedUI"]["brailleReview"]
-        conf["CJKEnhancedUI"] = {}
-        conf["CJKEnhancedUI"]["version"] = "1.2"
-        conf["CJKEnhancedUI"]["speechReview"] = speechReview
-        conf["CJKEnhancedUI"]["brailleReview"] = brailleReview
+        speechReview = conf["CJKQuickReview"]["speechReview"]
+        brailleReview = conf["CJKQuickReview"]["brailleReview"]
+        conf["CJKQuickReview"] = {}
+        conf["CJKQuickReview"]["version"] = "1.6"
+        conf["CJKQuickReview"]["speechReview"] = speechReview
+        conf["CJKQuickReview"]["brailleReview"] = brailleReview
 except KeyError:
     #Either this is a fresh install, or the config section is for an older version.
 #Initialize the config section.
-    conf["CJKEnhancedUI"] = {}
-    conf["CJKEnhancedUI"]["version"] = "1.2"
-    conf["CJKEnhancedUI"]["speechReview"] = "On"    #The speech review mode is turned on by default.
-    conf["CJKEnhancedUI"]["brailleReview"] = "On"   #The Braille review mode is set to "On" by default.
+    conf["CJKQuickReview"] = {}
+    conf["CJKQuickReview"]["version"] = "1.6"
+    conf["CJKQuickReview"]["speechReview"] = "On"    #The speech review mode is turned on by default.
+    conf["CJKQuickReview"]["brailleReview"] = "On"   #The Braille review mode is set to "On" by default.
 
-CJK = conf["CJKEnhancedUI"]
+CJK = conf["CJKQuickReview"]
 
 def isAlphanumeric(char):
     """
@@ -225,9 +227,14 @@ def custom_reportNewText(self,oldString,newString):
             except TypeError:
                 pass
         if newSpeechText:
-            queueHandler.queueFunction(queueHandler.eventQueue, ui.reviewMessage, newSpeechText)
+          queueHandler.queueFunction(queueHandler.eventQueue, ui.reviewMessage, newSpeechText)
         elif newText:
-            queueHandler.queueFunction(queueHandler.eventQueue,speech.speakText,newText,symbolLevel=characterProcessing.SYMLVL_ALL)
+          queueHandler.queueFunction(
+              queueHandler.eventQueue,
+              speech.speakText,
+              newText,
+              symbolLevel=characterProcessing.SymbolLevel.ALL
+          )
 
 def speechReview_getCharacterDescription(locale, character):
     """
