@@ -23,7 +23,7 @@ addon_info = {
 	# Author(s)
 	"addon_author" : u"Michael M Chen <m11chen.nvda@gmail.com>; 蔡宗豪 Victor Cai <surfer0627@gmail.com>; Tseng Woody <tsengwoody.tw@gmail.com>",
 	# URL for the add-on documentation support
-	"addon_url" : None,
+	"addon_url" : "https://github.com/m11chen/CJK_QuickReview",
 	# Documentation file name
 	"addon_docFileName" : "readme.html",
 	# Minimum NVDA version supported (e.g. "2018.3.0", minor version is optional)
