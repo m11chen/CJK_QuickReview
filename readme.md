@@ -44,6 +44,3 @@ Update to be compatible with 2023.1
 
 * Fix Typing into the input composition window so the first character description is automatically spoken.
 * Trim leading space in description when enumerating through list using review currrent character functions.
-
-
-Update to be compatible with 2023.1
