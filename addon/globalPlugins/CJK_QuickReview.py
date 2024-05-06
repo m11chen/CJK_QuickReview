@@ -110,7 +110,7 @@ def _getSpellingSpeechWithoutCharMode(
 				#This is to prevent phonetic spelling of the alphabets when typing, and moving the caret and review cursor.
 				if isAlphanumeric(speakCharAs) and not CJK["isReviewCharacter"]:
 					#The cursor has moved, so reset the previously stored character.
-					#This allows  for a more consistent speech feedback by always speaking the phonetic spelling of alphanumeric characters first after the focus moves.
+					#This allows	for a more consistent speech feedback by always speaking the phonetic spelling of alphanumeric characters first after the focus moves.
 					CJK["previousCharacter"] = ""
 				elif config.conf["CJKQuickReview"]["speechReview"] == "On":
 					#Retrieve the character description one at a time.
@@ -248,9 +248,9 @@ def speechReview_getCharacterDescription(locale, character):
 	This function is derived from the default getCharacterDescription function specifically to handle the speechreview mode behavior.
 	@param locale: the locale (language[_COUNTRY]) the description should be for.
 	@type locale: string
-	@param character: the character  who's description should be retrieved.
+	@param character: the character	 who's description should be retrieved.
 	@type character: string
-	@return:  the found description for the given character. if speech/Braille review mode is turned on, one description is returned at a time.
+	@return:	the found description for the given character. if speech/Braille review mode is turned on, one description is returned at a time.
 	@rtype: string
 	"""
 	try:
@@ -289,7 +289,12 @@ def speechReview_getCharacterDescription(locale, character):
 			#Allow speaking the character alone followed by a pause before the first description.
 			#This could be desirable when the user wants to quickly move through a sentence without hearing extra information.
 			currentDesc = character
-	currentDesc = currentDesc+" "+desc[CJK["descIndex"]]
+
+	if currentDesc != "":
+		currentDesc = currentDesc+" "+desc[CJK["descIndex"]]
+	else:
+		currentDesc = desc[CJK["descIndex"]]
+
 	#Free the character descriptions from the decimal and hexadecimal representation at the end of the list.
 	#This restores default behavior of the characterProcessing.getCharacterDescription function.
 	desc.remove(s)
